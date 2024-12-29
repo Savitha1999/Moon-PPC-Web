@@ -2,7 +2,6 @@
 
 
 
-
 const express = require('express');
 const router = express.Router();
 const AddModel = require('./AddModel');
@@ -43,67 +42,67 @@ const upload = multer({
 });
 
 
-// Store new user data with PPC-ID
-router.post('/store-data', async (req, res) => {
-  const { phoneNumber } = req.body;
-
-  if (!phoneNumber) {
-    return res.status(400).json({ message: 'Phone number is required.' });
-  }
-
-  try {
-    console.log('Incoming request body:', req.body);
-
-    // Check if the user already exists
-    const existingUser = await AddModel.findOne({ phoneNumber });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists.' });
-    }
-
-    // Create new user with PPC-ID
-    const count = await AddModel.countDocuments();
-    const ppcId = 1001 + count;
-
-    const newUser = new AddModel({ phoneNumber, ppcId });
-    await newUser.save();
-
-    console.log('User stored successfully:', newUser);
-    res.status(201).json({ message: 'User added successfully!', ppcId });
-  } catch (error) {
-    console.error('Error storing user details:', error);
-    res.status(500).json({ message: 'Error storing user details.', error });
-  }
-});
-
-
-
-
 // // Store new user data with PPC-ID
 // router.post('/store-data', async (req, res) => {
-//     const { phoneNumber } = req.body;
-  
-//     if (!phoneNumber) {
-//       return res.status(400).json({ message: 'Phone number is required.' });
+//   const { phoneNumber } = req.body;
+
+//   if (!phoneNumber) {
+//     return res.status(400).json({ message: 'Phone number is required.' });
+//   }
+
+//   try {
+//     console.log('Incoming request body:', req.body);
+
+//     // Check if the user already exists
+//     const existingUser = await AddModel.findOne({ phoneNumber });
+//     if (existingUser) {
+//       return res.status(400).json({ message: 'User already exists.' });
 //     }
+
+//     // Create new user with PPC-ID
+//     const count = await AddModel.countDocuments();
+//     const ppcId = 1001 + count;
+
+//     const newUser = new AddModel({ phoneNumber, ppcId });
+//     await newUser.save();
+
+//     console.log('User stored successfully:', newUser);
+//     res.status(201).json({ message: 'User added successfully!', ppcId });
+//   } catch (error) {
+//     console.error('Error storing user details:', error);
+//     res.status(500).json({ message: 'Error storing user details.', error });
+//   }
+// });
+
+
+
+
+// Store new user data with PPC-ID
+router.post('/store-data', async (req, res) => {
+    const { phoneNumber } = req.body;
   
-//     try {
-//       console.log('Incoming request body:', req.body);
+    if (!phoneNumber) {
+      return res.status(400).json({ message: 'Phone number is required.' });
+    }
   
-//       // Count the total documents to generate a unique PPC-ID
-//       const count = await AddModel.countDocuments();
-//       const ppcId = 1001 + count;
+    try {
+      console.log('Incoming request body:', req.body);
   
-//       // Create new user with a new PPC-ID even if the phone number exists
-//       const newUser = new AddModel({ phoneNumber, ppcId });
-//       await newUser.save();
+      // Count the total documents to generate a unique PPC-ID
+      const count = await AddModel.countDocuments();
+      const ppcId = 1001 + count;
   
-//       console.log('User stored successfully:', newUser);
-//     //   res.status(201).json({ message: 'User added successfully!', ppcId });
-//     } catch (error) {
-//       console.error('Error storing user details:', error);
-//       res.status(500).json({ message: 'Error storing user details.', error });
-//     }
-//   });
+      // Create new user with a new PPC-ID even if the phone number exists
+      const newUser = new AddModel({ phoneNumber, ppcId });
+      await newUser.save();
+  
+      console.log('User stored successfully:', newUser);
+      res.status(201).json({ message: 'User added successfully!', ppcId });
+    } catch (error) {
+      console.error('Error storing user details:', error);
+      res.status(500).json({ message: 'Error storing user details.', error });
+    }
+  });
   
 
 
@@ -281,6 +280,181 @@ router.get('/fetch-data', async (req, res) => {
         res.status(500).json({ message: 'Error fetching user details.', error });
     }
 });
+
+
+
+// Temporary deletion
+router.delete('/delete-temporary', async (req, res) => {
+  const { phoneNumber, ppcId, reason } = req.query;
+
+  // Ensure at least one parameter and reason are provided
+  if (!phoneNumber && !ppcId) {
+      return res.status(400).json({ message: 'Either phone number or PPC-ID is required.' });
+  }
+
+  if (!reason) {
+      return res.status(400).json({ message: 'Reason for deletion is required.' });
+  }
+
+  try {
+      console.log('Incoming delete request:', req.query);
+
+      // Normalize phone number (remove spaces, dashes, country code, and ensure consistency)
+      const normalizedPhoneNumber = phoneNumber
+          ? phoneNumber.replace(/[\s-]/g, '').replace(/^(\+91|91|0)/, '').trim() // Remove country code, spaces, dashes
+          : null;
+
+      // Build query dynamically based on the provided parameters
+      const query = {};
+      if (normalizedPhoneNumber) query.phoneNumber = new RegExp(normalizedPhoneNumber + '$'); // Match phone number ending with the query
+      if (ppcId) query.ppcId = ppcId;
+
+      console.log('Query Object for deletion:', query);
+
+      // Find the user and update the deletion reason, time, and date
+      const update = {
+          isDeleted: true,
+          deletionReason: reason,
+          deletionDate: new Date(), // Store the current date and time
+      };
+
+      const updatedUser = await AddModel.findOneAndUpdate(query, update, { new: true });
+
+      // Check if user was found and updated
+      if (!updatedUser) {
+          console.error('User not found for deletion:', query);
+          return res.status(404).json({ message: 'User not found.' });
+      }
+
+      console.log('User marked as deleted successfully:', updatedUser);
+
+      // Return success response with additional details
+      res.status(200).json({
+          message: 'User marked as deleted successfully!',
+          timestamp: new Date().toISOString(),
+          reason,
+          deletedUser: {
+              id: updatedUser._id,
+              phoneNumber: updatedUser.phoneNumber,
+              ppcId: updatedUser.ppcId,
+              deletionReason: updatedUser.deletionReason,
+              deletionDate: updatedUser.deletionDate,
+          },
+      });
+  } catch (error) {
+      console.error('Error marking user as deleted:', error);
+      res.status(500).json({ message: 'Error marking user as deleted.', error });
+  }
+});
+
+
+
+
+router.get('/fetch-datas', async (req, res) => {
+  const { phoneNumber } = req.query;
+
+  // Ensure phoneNumber is provided
+  if (!phoneNumber) {
+      return res.status(400).json({ message: 'Phone number is required.' });
+  }
+
+  try {
+      console.log('Incoming fetch request:', req.query);
+
+      // Normalize phone number (remove spaces, dashes, country code, and ensure consistency)
+      const normalizedPhoneNumber = phoneNumber
+          ? phoneNumber.replace(/[\s-]/g, '').replace(/^(\+91|91|0)/, '').trim() // Remove country code, spaces, dashes
+          : null;
+
+      // Build query to match the normalized phone number
+      const query = { phoneNumber: new RegExp(normalizedPhoneNumber + '$') }; // Match phone number ending with the query
+
+      console.log('Query Object:', query);
+
+      // Fetch all users matching the phone number from the database
+      const users = await AddModel.find(query);
+
+      // Check if users exist
+      if (!users || users.length === 0) {
+          console.error('Users not found:', query);
+          return res.status(404).json({ message: 'Users not found.' });
+      }
+
+      console.log('User data fetched successfully:', users);
+
+      // Return the fetched user data
+      res.status(200).json({ message: 'User data fetched successfully!', users });
+  } catch (error) {
+      console.error('Error fetching user details:', error);
+      res.status(500).json({ message: 'Error fetching user details.', error });
+  }
+});
+
+
+
+router.get('/fetch-all-data', async (req, res) => {
+  try {
+      console.log('Incoming fetch all data request');
+
+      // Fetch all users from the database
+      const users = await AddModel.find({});
+
+      console.log('All user data fetched successfully:', users);
+
+      // Return the fetched user data
+      res.status(200).json({ message: 'All user data fetched successfully!', users });
+  } catch (error) {
+      console.error('Error fetching all user details:', error);
+      res.status(500).json({ message: 'Error fetching all user details.', error });
+  }
+});
+
+
+
+router.delete('/delete-data', async (req, res) => {
+  const { phoneNumber, ppcId } = req.query;
+
+  // Ensure at least one parameter is provided
+  if (!phoneNumber && !ppcId) {
+      return res.status(400).json({ message: 'Either phone number or PPC-ID is required.' });
+  }
+
+  try {
+      console.log('Incoming delete request:', req.query);
+
+      // Normalize phone number (remove spaces, dashes, country code, and ensure consistency)
+      const normalizedPhoneNumber = phoneNumber
+          ? phoneNumber.replace(/[\s-]/g, '').replace(/^(\+91|91|0)/, '').trim() // Remove country code, spaces, dashes
+          : null;
+
+      // Build query dynamically based on the provided parameters
+      const query = {};
+      if (normalizedPhoneNumber) query.phoneNumber = new RegExp(normalizedPhoneNumber + '$'); // Match phone number ending with the query
+      if (ppcId) query.ppcId = ppcId;
+
+      console.log('Query Object for deletion:', query);
+
+      // Delete user from the database
+      const deletedUser = await AddModel.findOneAndDelete(query);
+
+      // Check if user was found and deleted
+      if (!deletedUser) {
+          console.error('User not found for deletion:', query);
+          return res.status(404).json({ message: 'User not found.' });
+      }
+
+      console.log('User deleted successfully:', deletedUser);
+
+      // Return success response
+      res.status(200).json({ message: 'User deleted successfully!', deletedUser });
+  } catch (error) {
+      console.error('Error deleting user:', error);
+      res.status(500).json({ message: 'Error deleting user.', error });
+  }
+});
+
+
+
 
 
 module.exports = router;
